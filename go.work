@@ -1,0 +1,6 @@
+go 1.22.3
+
+use (
+	.
+	examples/simple_http_server
+)
