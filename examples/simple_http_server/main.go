@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"errors"
+	"github.com/NicolasBissig/gotel"
 	"log"
 	"net"
 	"net/http"
-	"os"
-	"os/signal"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -20,24 +18,22 @@ func main() {
 }
 
 func run() (err error) {
-	// Handle SIGINT (CTRL+C) gracefully.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-
 	// Set up OpenTelemetry.
-	otelShutdown, err := SetupOTelSDK(ctx)
+	otel, err := gotel.Setup()
 	if err != nil {
-		return
+		log.Printf("failed to set up OpenTelemetry: %v", err)
+		_ = otel.Shutdown(context.Background())
 	}
+
 	// Handle shutdown properly so nothing leaks.
 	defer func() {
-		err = errors.Join(err, otelShutdown(context.Background()))
+		_ = otel.Shutdown(context.Background())
 	}()
 
 	// Start HTTP server.
 	srv := &http.Server{
 		Addr:         ":8080",
-		BaseContext:  func(_ net.Listener) context.Context { return ctx },
+		BaseContext:  func(_ net.Listener) context.Context { return otel.RootContext },
 		ReadTimeout:  time.Second,
 		WriteTimeout: 10 * time.Second,
 		Handler:      newHTTPHandler(),
@@ -52,10 +48,10 @@ func run() (err error) {
 	case err = <-srvErr:
 		// Error when starting HTTP server.
 		return
-	case <-ctx.Done():
+	case <-otel.RootContext.Done():
 		// Wait for first CTRL+C.
 		// Stop receiving signal notifications as soon as possible.
-		stop()
+		otel.CancelFunction()
 	}
 
 	// When Shutdown is called, ListenAndServe immediately returns ErrServerClosed.
