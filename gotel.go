@@ -2,7 +2,8 @@ package gotel
 
 import (
 	"context"
-	"github.com/NicolasBissig/gotel/lib"
+	"fmt"
+	"github.com/NicolasBissig/gotel/internal"
 	"os"
 	"os/signal"
 )
@@ -10,28 +11,39 @@ import (
 // OptionFunc is a function that sets some option on the OpenTelemetry SDK.
 type OptionFunc func() error
 
-type InitializedOtelSdk struct {
-	Shutdown       func(context.Context) error
-	CancelFunction context.CancelFunc
-	RootContext    context.Context
+type Sdk struct {
+	Shutdown    func(context.Context) error
+	RootContext context.Context
 }
 
-func Setup(opts ...OptionFunc) (*InitializedOtelSdk, error) {
-	result := &InitializedOtelSdk{}
-
+// Setup initializes the OpenTelemetry SDK.
+// Calling Shutdown is not necessary, as it is called automatically when the RootContext is done, i.e. when the application is terminated.
+//
+// Example usage:
+//
+//	sdk, err := gotel.Setup()
+//	if err != nil {
+//	    return fmt.Errorf("failed to set up OpenTelemetry: %w", err)
+//	}
+func Setup(opts ...OptionFunc) (*Sdk, error) {
 	// Handle SIGINT (CTRL+C) gracefully.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-
-	result.RootContext = ctx
+	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 
 	// Set up OpenTelemetry.
-	otelShutdown, err := lib.SetupOTelSDK(ctx)
+	otelShutdown, err := internal.SetupOTelSDK(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to set up OpenTelemetry: %w", err)
 	}
 
-	result.Shutdown = otelShutdown
+	sdk := &Sdk{
+		Shutdown:    otelShutdown,
+		RootContext: ctx,
+	}
 
-	return result, nil
+	go func() {
+		<-sdk.RootContext.Done()
+		_ = sdk.Shutdown(context.Background())
+	}()
+
+	return sdk, nil
 }
