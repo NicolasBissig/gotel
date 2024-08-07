@@ -1,6 +1,7 @@
 package gotelhttp
 
 import (
+	"fmt"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
@@ -12,7 +13,7 @@ func HandleFunc(pattern string, handlerFunc http.HandlerFunc, mux ...*http.Serve
 	// Configure the "http.route" for the HTTP instrumentation.
 	withRouteTag := otelhttp.WithRouteTag(route, handlerFunc)
 	withCorrectName := spanNameInjector(route, withRouteTag)
-	wrapped := otelhttp.NewHandler(withCorrectName, route)
+	wrapped := otelhttp.NewHandler(traceContextInjector(withCorrectName), route)
 
 	if len(mux) == 0 {
 		http.Handle(pattern, wrapped)
@@ -58,4 +59,22 @@ func spanNameInjector(route string, handlerFunc http.Handler) http.HandlerFunc {
 // extractRoute turns a pattern like "GET /rolldice" into "/rolldice".
 func extractRoute(pattern string) string {
 	return pattern[strings.Index(pattern, " ")+1:]
+}
+
+func traceContextInjector(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// get the current span
+		span := trace.SpanFromContext(r.Context())
+		// set the traceparent in w3c format: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01
+		traceparent := fmt.Sprintf("00-%s-%s-%s", span.SpanContext().TraceID().String(), span.SpanContext().SpanID().String(), span.SpanContext().TraceFlags().String())
+		w.Header().Set("traceparent", traceparent)
+
+		// set the tracestate, if present
+		tracestate := span.SpanContext().TraceState()
+		if tracestate.Len() > 0 {
+			w.Header().Set("tracestate", tracestate.String())
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
