@@ -23,3 +23,7 @@ lint-install:
 lint:
 	golangci-lint run
 	nilaway ./...
+
+upgrade:
+	go get -u
+	go mod tidy
