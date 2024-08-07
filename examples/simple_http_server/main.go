@@ -9,8 +9,6 @@ import (
 	"net"
 	"net/http"
 	"time"
-
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func main() {
@@ -44,12 +42,9 @@ func run() (err error) {
 }
 
 func newHTTPHandler() http.Handler {
-	mux := http.NewServeMux()
+	mux := gotelhttp.NewServeMux()
 
-	gotelhttp.Handle(mux, "GET /rolldice", rolldice)
+	mux.HandleFunc("GET /rolldice", rolldice)
 
-	// Add HTTP instrumentation for the whole server.
-	handler := otelhttp.NewHandler(mux, "/")
-
-	return handler
+	return mux
 }

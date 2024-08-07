@@ -7,12 +7,44 @@ import (
 	"strings"
 )
 
-func Handle(mux *http.ServeMux, pattern string, handlerFunc http.HandlerFunc) {
+func HandleFunc(pattern string, handlerFunc http.HandlerFunc, mux ...*http.ServeMux) {
 	route := extractRoute(pattern)
 	// Configure the "http.route" for the HTTP instrumentation.
 	withRouteTag := otelhttp.WithRouteTag(route, handlerFunc)
 	withCorrectName := spanNameInjector(route, withRouteTag)
-	mux.Handle(pattern, withCorrectName)
+	wrapped := otelhttp.NewHandler(withCorrectName, route)
+
+	if len(mux) == 0 {
+		http.Handle(pattern, wrapped)
+	} else {
+		for _, m := range mux {
+			m.Handle(pattern, wrapped)
+		}
+	}
+}
+
+func Handle(pattern string, handler http.Handler, mux ...*http.ServeMux) {
+	HandleFunc(pattern, handler.ServeHTTP, mux...)
+}
+
+type ServeMux struct {
+	*http.ServeMux
+}
+
+func NewServeMux() *ServeMux {
+	mux := http.NewServeMux()
+
+	return &ServeMux{
+		ServeMux: mux,
+	}
+}
+
+func (mux *ServeMux) Handle(pattern string, handler http.Handler) {
+	HandleFunc(pattern, handler.ServeHTTP, mux.ServeMux)
+}
+
+func (mux *ServeMux) HandleFunc(pattern string, handlerFunc http.HandlerFunc) {
+	HandleFunc(pattern, handlerFunc, mux.ServeMux)
 }
 
 func spanNameInjector(route string, handlerFunc http.Handler) http.HandlerFunc {
