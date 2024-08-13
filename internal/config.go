@@ -12,10 +12,10 @@ const (
 func exportEndpoint() (string, error) {
 	// The default OTLP exporter is set to "https://localhost:4317"
 	// See: https://github.com/open-telemetry/opentelemetry-go/issues/4147
-	// usually http://localhost:4317 is preferred
+	// usually http://localhost:4317|4318 is preferred
 	_, present := os.LookupEnv(OTEL_EXPORTER_OTLP_ENDPOINT)
 	if !present {
-		err := os.Setenv(OTEL_EXPORTER_OTLP_ENDPOINT, "http://localhost:4317")
+		err := os.Setenv(OTEL_EXPORTER_OTLP_ENDPOINT, "http://localhost:4318")
 		if err != nil {
 			return "", err
 		}
