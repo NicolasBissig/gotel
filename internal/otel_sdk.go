@@ -5,32 +5,22 @@ import (
 	"errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"log"
-	"os"
-)
-
-const (
-	OTEL_EXPORTER_OTLP_ENDPOINT = "OTEL_EXPORTER_OTLP_ENDPOINT"
 )
 
 // SetupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
 func SetupOTelSDK(ctx context.Context) (shutdown func(context.Context) error, err error) {
-	// The default OTLP exporter is set to "https://localhost:4317"
-	// See: https://github.com/open-telemetry/opentelemetry-go/issues/4147
-	// usually http://localhost:4317 is preferred
-	_, present := os.LookupEnv(OTEL_EXPORTER_OTLP_ENDPOINT)
-	if !present {
-		err := os.Setenv(OTEL_EXPORTER_OTLP_ENDPOINT, "http://localhost:4317")
-		if err != nil {
-			return nil, err
-		}
+	if _, err := exportEndpoint(); err != nil {
+		return nil, err
 	}
 
 	var shutdownFuncs []func(context.Context) error
@@ -113,7 +103,18 @@ func newPropagator() propagation.TextMapPropagator {
 }
 
 func newTraceProvider(ctx context.Context, res *resource.Resource) (*trace.TracerProvider, error) {
-	traceExporter, err := otlptracegrpc.New(ctx)
+	proto := lookupProtocol()
+
+	var traceExporter trace.SpanExporter
+	var err error
+
+	switch proto {
+	case ProtocolHTTP:
+		traceExporter, err = otlptracehttp.New(ctx)
+	case ProtocolGRPC:
+		traceExporter, err = otlptracegrpc.New(ctx)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +127,18 @@ func newTraceProvider(ctx context.Context, res *resource.Resource) (*trace.Trace
 }
 
 func newMeterProvider(ctx context.Context, res *resource.Resource) (*metric.MeterProvider, error) {
-	metricExporter, err := otlpmetricgrpc.New(ctx)
+	proto := lookupProtocol()
+
+	var metricExporter metric.Exporter
+	var err error
+
+	switch proto {
+	case ProtocolHTTP:
+		metricExporter, err = otlpmetrichttp.New(ctx)
+	case ProtocolGRPC:
+		metricExporter, err = otlpmetricgrpc.New(ctx)
+	}
+
 	if err != nil {
 		return nil, err
 	}
