@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
 )
@@ -19,6 +20,7 @@ func GotelMiddleware(f strictnethttp.StrictHTTPHandlerFunc, operationID string) 
 		span := trace.SpanFromContext(ctx)
 		// set the operation name to the operation ID
 		span.SetName(fmt.Sprintf("%s %s", r.Method, operationID))
+		span.SetAttributes(attribute.String("openapi.operation_id", operationID))
 
 		// TODO: check for error and change status + add the error to the span
 		return f(ctx, w, r, request)
