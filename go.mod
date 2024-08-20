@@ -3,6 +3,7 @@ module github.com/NicolasBissig/gotel
 go 1.22.3
 
 require (
+	github.com/oapi-codegen/runtime v1.1.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
 	go.opentelemetry.io/otel v1.28.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.28.0
